@@ -1,17 +1,166 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter import font as tkFont
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 import math
 import win32print
 import win32ui
 from PIL import ImageWin
 import os
+import sys
+import json
+import random
+import tempfile
+from about import show_about_dialog
+from print_dialog import show_print_dialog
+
+# Drag & Drop
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    DND_AVAILABLE = True
+except ImportError:
+    DND_AVAILABLE = False
+    print("tkinterdnd2 no disponible - drag & drop deshabilitado")
+
+class FontManager:
+    """Gestor de fuentes con fallback automático"""
+    def __init__(self):
+        self.base_path = self._get_base_path()
+        self.fonts_loaded = {}
+        self.load_aptos_fonts()
+    
+    def _get_base_path(self):
+        """Obtener ruta base del proyecto"""
+        if getattr(sys, 'frozen', False):
+            return sys._MEIPASS
+        else:
+            return os.path.dirname(os.path.abspath(__file__))
+    
+    def load_aptos_fonts(self):
+        """Intentar cargar fuentes Aptos desde resources/fonts"""
+        fonts_dir = os.path.join(self.base_path, "resources", "fonts")
+        
+        aptos_variants = [
+            ("Aptos", "Aptos.ttf"),
+            ("Aptos-Bold", "Aptos-Bold.ttf"),
+            ("Aptos-Italic", "Aptos-Italic.ttf"),
+            ("Aptos-Black", "Aptos-Black.ttf"),
+        ]
+        
+        for font_name, font_file in aptos_variants:
+            font_path = os.path.join(fonts_dir, font_file)
+            if os.path.exists(font_path):
+                try:
+                    # Registrar fuente (esto no siempre funciona en runtime)
+                    self.fonts_loaded[font_name] = font_path
+                    print(f"✓ Fuente encontrada: {font_name}")
+                except Exception as e:
+                    print(f"Error cargando {font_name}: {e}")
+    
+    def get_font(self, size=10, weight='normal', slant='roman'):
+        """Obtener fuente con fallback automático"""
+        # Intentar Aptos primero
+        try:
+            if weight == 'bold':
+                return tkFont.Font(family='Aptos', size=size, weight='bold', slant=slant)
+            else:
+                return tkFont.Font(family='Aptos', size=size, weight=weight, slant=slant)
+        except Exception:
+            pass
+
+        # Fallback a Segoe UI
+        try:
+            return tkFont.Font(family='Segoe UI', size=size, weight=weight, slant=slant)
+        except Exception:
+            pass
+
+        # Fallback a Calibri
+        try:
+            return tkFont.Font(family='Calibri', size=size, weight=weight, slant=slant)
+        except Exception:
+            pass
+        
+        # Fallback final a Arial
+        return tkFont.Font(family='Arial', size=size, weight=weight, slant=slant)
+
+
+class VersionManager:
+    """Gestor de versiones con rotación"""
+    def __init__(self):
+        self.base_path = self._get_base_path()
+        self.version_data = self.load_version_info()
+        self.current_version_index = 0
+    
+    def _get_base_path(self):
+        """Obtener ruta base del proyecto"""
+        if getattr(sys, 'frozen', False):
+            return sys._MEIPASS
+        else:
+            return os.path.dirname(os.path.abspath(__file__))
+    
+    def load_version_info(self):
+        """Cargar información de versiones desde JSON"""
+        try:
+            version_path = os.path.join(self.base_path, "resources", "data", "version_info.json")
+            
+            if os.path.exists(version_path):
+                with open(version_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    print(f"✓ Versiones cargadas: {len(data['versions'])} encontradas")
+                    return data
+            else:
+                print(f"version_info.json no encontrado en: {version_path}")
+        except Exception as e:
+            print(f"Error cargando version_info.json: {e}")
+        
+        # Fallback si no se puede cargar
+        return {
+            "current_version": "2.12.6",
+            "versions": [
+                {
+                    "version": "2.12.6",
+                    "date": "Noviembre 2025",
+                    "description": "Correcciones de usabilidad pre-release"
+                }
+            ]
+        }
+    
+    def get_current_version(self):
+        """Obtener versión actual"""
+        return self.version_data["current_version"]
+    
+    def get_next_version_data(self):
+        """Rotar y obtener siguiente versión para mostrar"""
+        if not self.version_data["versions"]:
+            return {
+                "version": "2.12.6",
+                "date": "Noviembre 2025",
+                "description": "Sin info"
+            }
+        
+        # Rotar índice
+        version_info = self.version_data["versions"][self.current_version_index]
+        self.current_version_index = (self.current_version_index + 1) % len(self.version_data["versions"])
+        
+        return version_info
+
 
 class PosterPrinter:
     def __init__(self, root):
         self.root = root
         self.root.title("Poster Printer - Impresión en Tiles")
         self.root.geometry("1400x900")
+        
+        # Inicializar gestores
+        self.font_manager = FontManager()
+        self.version_manager = VersionManager()
+        
+        # Configurar icono de la ventana
+        self.setup_window_icon()
+        
+        # Configurar drag & drop en toda la ventana si está disponible
+        if DND_AVAILABLE:
+            self.setup_drag_drop()
         
         # Variables de configuración
         self.image_path = None
@@ -57,7 +206,27 @@ class PosterPrinter:
         self.resize_handles = []
         
         self.create_ui()
-        
+
+        # Atajos de teclado
+        self.root.bind("<Control-o>", lambda e: self.load_image())
+
+    def setup_window_icon(self):
+        """Configurar icono de la ventana desde resources"""
+        try:
+            if getattr(sys, 'frozen', False):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+            
+            icon_path = os.path.join(base_path, "resources", "icons", "icon.png")
+            if os.path.exists(icon_path):
+                icon_img = Image.open(icon_path)
+                icon_photo = ImageTk.PhotoImage(icon_img)
+                self.root.iconphoto(True, icon_photo)
+                print("✓ Icono de ventana cargado")
+        except Exception as e:
+            print(f"Error cargando icono de ventana: {e}")
+    
     def create_ui(self):
         main_paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True)
@@ -69,40 +238,58 @@ class PosterPrinter:
         main_paned.add(right_frame)
         
         # CONTROLES
-        control_canvas = tk.Canvas(left_frame)
-        scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=control_canvas.yview)
-        scrollable_frame = ttk.Frame(control_canvas)
-        
-        scrollable_frame.bind("<Configure>", lambda e: control_canvas.configure(scrollregion=control_canvas.bbox("all")))
-        
-        control_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        control_canvas.configure(yscrollcommand=scrollbar.set)
-        
-        control_canvas.pack(side="left", fill="both", expand=True)
+        self.control_canvas = tk.Canvas(left_frame)
+        scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.control_canvas.yview)
+        scrollable_frame = ttk.Frame(self.control_canvas)
+
+        scrollable_frame.bind("<Configure>", lambda e: self.control_canvas.configure(scrollregion=self.control_canvas.bbox("all")))
+
+        self.control_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        self.control_canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.control_canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+        # Mousewheel en el panel izquierdo scrollea los controles
+        def _on_control_mousewheel(event):
+            self.control_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self.control_canvas.bind("<MouseWheel>", _on_control_mousewheel)
+        scrollable_frame.bind("<MouseWheel>", _on_control_mousewheel)
+        # Propagar a hijos cuando se creen (bind_all con filtro)
+        self._control_mousewheel_handler = _on_control_mousewheel
+        self._scrollable_frame = scrollable_frame
         
         # Cargar imagen
-        ttk.Label(scrollable_frame, text="IMAGEN", font=('Arial', 10, 'bold')).pack(pady=(10,5), padx=10, anchor='w')
+        title_font = self.font_manager.get_font(10, 'bold')
+        ttk.Label(scrollable_frame, text="IMAGEN", font=title_font).pack(pady=(10,5), padx=10, anchor='w')
         ttk.Button(scrollable_frame, text="📁 Cargar Imagen", command=self.load_image).pack(pady=5, padx=10, fill='x')
         
         # Área de drag & drop simple
         self.drop_frame = tk.Frame(scrollable_frame, relief='groove', borderwidth=2, bg='#f0f0f0', height=50)
         self.drop_frame.pack(pady=5, padx=10, fill='x')
         self.drop_frame.pack_propagate(False)
-        drop_label = tk.Label(self.drop_frame, text="📥 Arrastra imagen aquí", bg='#f0f0f0', fg='gray', font=('Arial', 9))
+        
+        if DND_AVAILABLE:
+            drop_text = "📥 Arrastra imagen aquí (o en cualquier parte de la ventana)"
+        else:
+            drop_text = "⚠️ Drag & Drop no disponible - ejecuta INSTALAR.bat"
+        
+        drop_label = tk.Label(self.drop_frame, text=drop_text, bg='#f0f0f0', fg='gray', 
+                             font=self.font_manager.get_font(9))
         drop_label.pack(expand=True)
         
-        self.info_label = ttk.Label(scrollable_frame, text="No hay imagen cargada", wraplength=250)
+        self.info_label = ttk.Label(scrollable_frame, text="No hay imagen cargada", wraplength=250,
+                                   font=self.font_manager.get_font(9))
         self.info_label.pack(pady=5, padx=10)
         
         ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', pady=10)
         
         # Papel
-        ttk.Label(scrollable_frame, text="PAPEL", font=('Arial', 10, 'bold')).pack(pady=(5,5), padx=10, anchor='w')
+        ttk.Label(scrollable_frame, text="PAPEL", font=title_font).pack(pady=(5,5), padx=10, anchor='w')
         
         paper_frame = ttk.Frame(scrollable_frame)
         paper_frame.pack(pady=5, padx=10, fill='x')
-        ttk.Label(paper_frame, text="Tamaño:").pack(anchor='w')
+        ttk.Label(paper_frame, text="Tamaño:", font=self.font_manager.get_font(9)).pack(anchor='w')
         self.paper_combo = ttk.Combobox(paper_frame, values=list(self.paper_sizes.keys()), state='readonly')
         self.paper_combo.set('A4')
         self.paper_combo.pack(fill='x')
@@ -110,7 +297,7 @@ class PosterPrinter:
         
         orient_frame = ttk.Frame(scrollable_frame)
         orient_frame.pack(pady=5, padx=10, fill='x')
-        ttk.Label(orient_frame, text="Orientación:").pack(anchor='w')
+        ttk.Label(orient_frame, text="Orientación:", font=self.font_manager.get_font(9)).pack(anchor='w')
         self.orient_var = tk.StringVar(value='vertical')
         ttk.Radiobutton(orient_frame, text="Vertical", value='vertical', variable=self.orient_var,
                        command=lambda: self.change_orientation('vertical')).pack(anchor='w')
@@ -120,18 +307,18 @@ class PosterPrinter:
         ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', pady=10)
         
         # Posición y tamaño
-        ttk.Label(scrollable_frame, text="POSICIÓN Y TAMAÑO", font=('Arial', 10, 'bold')).pack(pady=(5,5), padx=10, anchor='w')
+        ttk.Label(scrollable_frame, text="POSICIÓN Y TAMAÑO", font=title_font).pack(pady=(5,5), padx=10, anchor='w')
         
         ttk.Label(scrollable_frame, text="💡 Arrastra la imagen para mover\n💡 Arrastra las esquinas para escalar", 
-                 foreground='gray', font=('Arial', 8)).pack(pady=5, padx=10)
+                 foreground='gray', font=self.font_manager.get_font(8)).pack(pady=5, padx=10)
         
         rotation_frame = ttk.Frame(scrollable_frame)
         rotation_frame.pack(pady=5, padx=10, fill='x')
-        ttk.Label(rotation_frame, text="Rotación (°):").pack(anchor='w')
+        ttk.Label(rotation_frame, text="Rotación (°):", font=self.font_manager.get_font(9)).pack(anchor='w')
         rotation_slider = ttk.Scale(rotation_frame, from_=0, to=360, variable=self.rotation_angle,
                                    orient='horizontal', command=lambda v: self.update_preview())
         rotation_slider.pack(fill='x')
-        self.rotation_label = ttk.Label(rotation_frame, text="0°")
+        self.rotation_label = ttk.Label(rotation_frame, text="0°", font=self.font_manager.get_font(9))
         self.rotation_label.pack(anchor='w')
         self.rotation_angle.trace('w', lambda *args: self.rotation_label.config(text=f"{self.rotation_angle.get()}°"))
         
@@ -143,15 +330,15 @@ class PosterPrinter:
         ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', pady=10)
         
         # Opciones de impresión
-        ttk.Label(scrollable_frame, text="OPCIONES DE IMPRESIÓN", font=('Arial', 10, 'bold')).pack(pady=(5,5), padx=10, anchor='w')
+        ttk.Label(scrollable_frame, text="OPCIONES DE IMPRESIÓN", font=title_font).pack(pady=(5,5), padx=10, anchor='w')
         
         overlap_frame = ttk.Frame(scrollable_frame)
         overlap_frame.pack(pady=5, padx=10, fill='x')
-        ttk.Label(overlap_frame, text="Superposición (mm):").pack(anchor='w')
+        ttk.Label(overlap_frame, text="Superposición (mm):", font=self.font_manager.get_font(9)).pack(anchor='w')
         overlap_slider = ttk.Scale(overlap_frame, from_=0, to=50, variable=self.overlap_mm,
                                   orient='horizontal', command=lambda v: self.update_preview())
         overlap_slider.pack(fill='x')
-        self.overlap_label = ttk.Label(overlap_frame, text="5.0 mm")
+        self.overlap_label = ttk.Label(overlap_frame, text="5.0 mm", font=self.font_manager.get_font(9))
         self.overlap_label.pack(anchor='w')
         self.overlap_mm.trace('w', lambda *args: self.overlap_label.config(text=f"{self.overlap_mm.get():.1f} mm"))
         
@@ -167,7 +354,7 @@ class PosterPrinter:
         
         bleed_frame = ttk.Frame(scrollable_frame)
         bleed_frame.pack(pady=5, padx=20, fill='x')
-        ttk.Label(bleed_frame, text="Dirección del borde:", font=('Arial', 9)).pack(anchor='w')
+        ttk.Label(bleed_frame, text="Dirección del borde:", font=self.font_manager.get_font(9)).pack(anchor='w')
         ttk.Radiobutton(bleed_frame, text="⬅ Izquierda/Arriba (derecha tapa izq, abajo tapa arriba)", 
                        value='left', variable=self.bleed_direction,
                        command=self.update_preview).pack(anchor='w')
@@ -178,13 +365,14 @@ class PosterPrinter:
         ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', pady=10)
         
         # Info páginas
-        self.pages_label = ttk.Label(scrollable_frame, text="Páginas: 0x0 = 0 hojas", font=('Arial', 10, 'bold'))
+        self.pages_label = ttk.Label(scrollable_frame, text="Páginas: 0x0 = 0 hojas", 
+                                    font=self.font_manager.get_font(10, 'bold'))
         self.pages_label.pack(pady=10, padx=10)
         
         # Zoom
         zoom_frame = ttk.Frame(scrollable_frame)
         zoom_frame.pack(pady=5, padx=10, fill='x')
-        ttk.Label(zoom_frame, text="Zoom Vista:").pack(anchor='w')
+        ttk.Label(zoom_frame, text="Zoom Vista:", font=self.font_manager.get_font(9)).pack(anchor='w')
         zoom_slider = ttk.Scale(zoom_frame, from_=0.5, to=3, value=self.display_scale,
                                orient='horizontal', command=self.on_zoom_change)
         zoom_slider.pack(fill='x')
@@ -194,7 +382,8 @@ class PosterPrinter:
         ttk.Button(scrollable_frame, text="💾 Exportar PDF", command=self.export_pdf).pack(pady=5, padx=10, fill='x')
         
         # VISTA PREVIA
-        ttk.Label(right_frame, text="VISTA PREVIA - ÁREA DE TRABAJO", font=('Arial', 12, 'bold')).pack(pady=5)
+        preview_font = self.font_manager.get_font(12, 'bold')
+        ttk.Label(right_frame, text="VISTA PREVIA - ÁREA DE TRABAJO", font=preview_font).pack(pady=5)
         
         canvas_frame = ttk.Frame(right_frame)
         canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -219,10 +408,37 @@ class PosterPrinter:
         self.canvas.bind("<Motion>", self.on_mouse_move)
         self.canvas.bind("<MouseWheel>", self.on_mousewheel)
         
-        ttk.Label(right_frame, text="💡 Arrastra la imagen | Arrastra esquinas para escalar | Rueda para zoom",
-                 foreground='gray').pack(pady=5)
+        # Label de ayuda + versión clickeable (botón disimulado) con rotación
+        help_frame = ttk.Frame(right_frame)
+        help_frame.pack(pady=5, fill='x')
+        
+        help_font = self.font_manager.get_font(9)
+        ttk.Label(help_frame, text="💡 Arrastra la imagen | Arrastra esquinas para escalar | Rueda para zoom",
+                 foreground='gray', font=help_font).pack(side='left', padx=10)
+        
+        # Botón disimulado "Acerca de" con versión rotatoria
+        current_version = self.version_manager.get_current_version()
+        version_label = tk.Label(help_frame, text=f"v{current_version} ⓘ", 
+                                foreground='#999', font=self.font_manager.get_font(8),
+                                cursor='hand2', bg=self.root.cget('bg'))
+        version_label.pack(side='right', padx=10)
+        version_label.bind("<Button-1>", self.show_about_with_rotation)
         
         self.draw_grid()
+
+        # Propagar mousewheel a todos los hijos del panel de controles
+        self._bind_mousewheel_recursive(self._scrollable_frame)
+
+    def _bind_mousewheel_recursive(self, widget):
+        """Bind mousewheel a un widget y todos sus hijos para scroll del panel izquierdo."""
+        widget.bind("<MouseWheel>", self._control_mousewheel_handler)
+        for child in widget.winfo_children():
+            self._bind_mousewheel_recursive(child)
+
+    def show_about_with_rotation(self, event=None):
+        """Mostrar diálogo About con versión rotativa"""
+        version_data = self.version_manager.get_next_version_data()
+        show_about_dialog(self.root, version_data)
     
     def mm_to_px(self, mm):
         return int(mm * self.display_scale)
@@ -238,7 +454,10 @@ class PosterPrinter:
         return width, height
     
     def get_pages_with_image(self):
-        """Calcula qué páginas realmente contienen imagen (no solo la caja)"""
+        """
+        Calcula qué páginas contienen el RECTÁNGULO DE SELECCIÓN (borde punteado).
+        FIX v2.11.9: Usa el bounding box del rectángulo de selección, no solo la imagen.
+        """
         if self.original_image is None:
             return []
         
@@ -247,17 +466,18 @@ class PosterPrinter:
         effective_w = paper_w - overlap
         effective_h = paper_h - overlap
         
-        # Bounding box de la imagen
-        img_left = self.img_x
-        img_top = self.img_y
-        img_right = self.img_x + self.img_width
-        img_bottom = self.img_y + self.img_height
+        # Bounding box del RECTÁNGULO DE SELECCIÓN (no de la imagen interior)
+        # El rectángulo de selección está definido por img_x, img_y, img_width, img_height
+        selection_left = self.img_x
+        selection_top = self.img_y
+        selection_right = self.img_x + self.img_width
+        selection_bottom = self.img_y + self.img_height
         
-        # Calcular rango de páginas
-        start_col = max(0, int(img_left / effective_w))
-        start_row = max(0, int(img_top / effective_h))
-        end_col = int(img_right / effective_w) + 1
-        end_row = int(img_bottom / effective_h) + 1
+        # Calcular rango de páginas que el rectángulo de selección toca
+        start_col = max(0, int(selection_left / effective_w))
+        start_row = max(0, int(selection_top / effective_h))
+        end_col = int(selection_right / effective_w) + 1
+        end_row = int(selection_bottom / effective_h) + 1
         
         pages_with_content = []
         
@@ -269,15 +489,60 @@ class PosterPrinter:
                 page_right = page_left + paper_w
                 page_bottom = page_top + paper_h
                 
-                # Verificar si la imagen intersecta con esta página
-                intersects = not (img_right <= page_left or img_left >= page_right or
-                                img_bottom <= page_top or img_top >= page_bottom)
+                # Verificar si el RECTÁNGULO DE SELECCIÓN intersecta con esta página
+                intersects = not (selection_right <= page_left or selection_left >= page_right or
+                                selection_bottom <= page_top or selection_top >= page_bottom)
                 
                 if intersects:
                     pages_with_content.append((row, col))
         
         return pages_with_content
     
+    def _process_loaded_image(self, file_path):
+        """Cargar y procesar una imagen desde ruta. Usado por load_image() y on_drop()."""
+        self.image_path = file_path
+        self.original_image = Image.open(file_path)
+
+        if self.original_image.mode not in ('RGB', 'RGBA'):
+            self.original_image = self.original_image.convert('RGB')
+
+        width, height = self.original_image.size
+        file_size = os.path.getsize(file_path) / 1024 / 1024
+        self.info_label.config(text=f"{os.path.basename(file_path)}\n{width}x{height} px\n{file_size:.2f} MB")
+
+        # Calcular tamaño de imagen basándose SOLO en la imagen original
+        dpi = 300
+
+        # Convertir pixels a mm (1 inch = 25.4mm)
+        img_width_mm = (width / dpi) * 25.4
+        img_height_mm = (height / dpi) * 25.4
+
+        # Si la imagen es muy pequeña, escalarla a un tamaño visible (mínimo 100mm de ancho)
+        if img_width_mm < 100:
+            scale = 100 / img_width_mm
+            img_width_mm = 100
+            img_height_mm = img_height_mm * scale
+
+        # Si la imagen es muy grande, escalarla a máximo 500mm de ancho
+        if img_width_mm > 500:
+            scale = 500 / img_width_mm
+            img_width_mm = 500
+            img_height_mm = img_height_mm * scale
+
+        # Guardar dimensiones en mm
+        self.img_width = img_width_mm
+        self.img_height = img_height_mm
+
+        # Posicionar en una ubicación visible del grid
+        paper_w, paper_h = self.get_paper_size_mm()
+        self.img_x = paper_w * 0.25
+        self.img_y = paper_h * 0.25
+
+        # Seleccionar automáticamente
+        self.selected = True
+
+        self.update_preview()
+
     def load_image(self):
         filetypes = [
             ('Todos los archivos de imagen', '*.jpg *.jpeg *.png *.bmp *.gif *.tiff *.tif *.webp'),
@@ -288,56 +553,65 @@ class PosterPrinter:
             ('TIFF', '*.tiff *.tif'),
             ('WebP', '*.webp'),
         ]
-        
+
         filename = filedialog.askopenfilename(title="Seleccionar imagen", filetypes=filetypes)
-        
+
         if filename:
             try:
-                self.image_path = filename
-                self.original_image = Image.open(filename)
-                
-                if self.original_image.mode not in ('RGB', 'RGBA'):
-                    self.original_image = self.original_image.convert('RGB')
-                
-                width, height = self.original_image.size
-                file_size = os.path.getsize(filename) / 1024 / 1024
-                self.info_label.config(text=f"{os.path.basename(filename)}\n{width}x{height} px\n{file_size:.2f} MB")
-                
-                # Calcular tamaño de imagen basándose SOLO en la imagen original
-                dpi = 300
-                
-                # Convertir pixels a mm (1 inch = 25.4mm)
-                img_width_mm = (width / dpi) * 25.4
-                img_height_mm = (height / dpi) * 25.4
-                
-                # Si la imagen es muy pequeña, escalarla a un tamaño visible (mínimo 100mm de ancho)
-                if img_width_mm < 100:
-                    scale = 100 / img_width_mm
-                    img_width_mm = 100
-                    img_height_mm = img_height_mm * scale
-                
-                # Si la imagen es muy grande, escalarla a máximo 500mm de ancho
-                if img_width_mm > 500:
-                    scale = 500 / img_width_mm
-                    img_width_mm = 500
-                    img_height_mm = img_height_mm * scale
-                
-                # Guardar dimensiones en mm
-                self.img_width = img_width_mm
-                self.img_height = img_height_mm
-                
-                # Posicionar en una ubicación visible del grid
-                paper_w, paper_h = self.get_paper_size_mm()
-                self.img_x = paper_w * 0.25
-                self.img_y = paper_h * 0.25
-                
-                # Seleccionar automáticamente
-                self.selected = True
-                
-                self.update_preview()
-                
+                self._process_loaded_image(filename)
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo cargar la imagen:\n{str(e)}")
+    
+    def setup_drag_drop(self):
+        """Configurar drag & drop en toda la ventana"""
+        # Registrar toda la ventana principal para recibir archivos
+        self.root.drop_target_register(DND_FILES)
+        self.root.dnd_bind('<<Drop>>', self.on_drop)
+        self.root.dnd_bind('<<DragEnter>>', self.on_drag_enter)
+        self.root.dnd_bind('<<DragLeave>>', self.on_drag_leave)
+    
+    def on_drag_enter(self, event):
+        """Cuando el archivo entra en la ventana"""
+        # Cambiar color del drop frame para feedback visual
+        self.drop_frame.config(bg='#e3f2fd', relief='solid', borderwidth=2)
+    
+    def on_drag_leave(self, event):
+        """Cuando el archivo sale de la ventana"""
+        # Restaurar color original
+        self.drop_frame.config(bg='#f0f0f0', relief='groove', borderwidth=2)
+    
+    def on_drop(self, event):
+        """Cuando se suelta un archivo en la ventana"""
+        # Restaurar color
+        self.drop_frame.config(bg='#f0f0f0', relief='groove', borderwidth=2)
+        
+        # Obtener ruta del archivo
+        files = self.root.tk.splitlist(event.data)
+        
+        if not files:
+            return
+        
+        file_path = files[0]  # Tomar el primer archivo
+        
+        # Validar extensión
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.tif', '.webp')
+        if not file_path.lower().endswith(valid_extensions):
+            messagebox.showerror("Error", 
+                               f"Formato no soportado.\n\n"
+                               f"Formatos válidos:\n"
+                               f"JPG, PNG, BMP, GIF, TIFF, WebP")
+            return
+        
+        # Cargar la imagen
+        try:
+            self._process_loaded_image(file_path)
+
+            # Feedback visual de éxito
+            self.drop_frame.config(bg='#c8e6c9')  # Verde claro
+            self.root.after(1000, lambda: self.drop_frame.config(bg='#f0f0f0'))
+
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo cargar la imagen:\n{str(e)}")
     
     def change_orientation(self, orient):
         self.orientation = orient
@@ -349,8 +623,11 @@ class PosterPrinter:
     
     def center_image(self):
         paper_w, paper_h = self.get_paper_size_mm()
-        workspace_w = paper_w * self.workspace_cols / 2
-        workspace_h = paper_h * self.workspace_rows / 2
+        overlap = self.overlap_mm.get()
+        effective_w = paper_w - overlap
+        effective_h = paper_h - overlap
+        workspace_w = effective_w * self.workspace_cols / 2
+        workspace_h = effective_h * self.workspace_rows / 2
         self.img_x = workspace_w - self.img_width / 2
         self.img_y = workspace_h - self.img_height / 2
         self.update_preview()
@@ -361,22 +638,25 @@ class PosterPrinter:
     
     def draw_grid(self):
         self.canvas.delete("all")
-        
+
         paper_w, paper_h = self.get_paper_size_mm()
-        
-        # Dibujar cuadrícula de páginas
+        overlap = self.overlap_mm.get()
+        effective_w = paper_w - overlap
+        effective_h = paper_h - overlap
+
+        # Dibujar cuadrícula de páginas (paso = effective, tamaño = paper)
         for row in range(self.workspace_rows):
             for col in range(self.workspace_cols):
-                x1 = self.mm_to_px(col * paper_w)
-                y1 = self.mm_to_px(row * paper_h)
-                x2 = self.mm_to_px((col + 1) * paper_w)
-                y2 = self.mm_to_px((row + 1) * paper_h)
-                
+                x1 = self.mm_to_px(col * effective_w)
+                y1 = self.mm_to_px(row * effective_h)
+                x2 = self.mm_to_px(col * effective_w + paper_w)
+                y2 = self.mm_to_px(row * effective_h + paper_h)
+
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline='#ccc', width=1)
-        
+
         # Configurar scroll region
-        total_w = self.mm_to_px(paper_w * self.workspace_cols)
-        total_h = self.mm_to_px(paper_h * self.workspace_rows)
+        total_w = self.mm_to_px(effective_w * self.workspace_cols + overlap)
+        total_h = self.mm_to_px(effective_h * self.workspace_rows + overlap)
         self.canvas.configure(scrollregion=(0, 0, total_w, total_h))
     
     def update_preview(self):
@@ -385,7 +665,7 @@ class PosterPrinter:
         paper_w, paper_h = self.get_paper_size_mm()
         overlap = self.overlap_mm.get()
         
-        # Obtener páginas que realmente tienen imagen
+        # Obtener páginas que realmente tienen imagen (basado en rectángulo de selección)
         pages_with_image = []
         if self.original_image is not None:
             pages_with_image = self.get_pages_with_image()
@@ -402,21 +682,23 @@ class PosterPrinter:
         else:
             self.pages_label.config(text="Páginas: 0x0 = 0 hojas")
         
-        # Dibujar cuadrícula de páginas
+        # Dibujar cuadrícula de páginas (paso = effective, tamaño = paper)
+        effective_w = paper_w - overlap
+        effective_h = paper_h - overlap
         for row in range(self.workspace_rows):
             for col in range(self.workspace_cols):
-                x1 = self.mm_to_px(col * paper_w)
-                y1 = self.mm_to_px(row * paper_h)
-                x2 = self.mm_to_px((col + 1) * paper_w)
-                y2 = self.mm_to_px((row + 1) * paper_h)
-                
+                x1 = self.mm_to_px(col * effective_w)
+                y1 = self.mm_to_px(row * effective_h)
+                x2 = self.mm_to_px(col * effective_w + paper_w)
+                y2 = self.mm_to_px(row * effective_h + paper_h)
+
                 # Resaltar SOLO páginas que tienen imagen
                 if (row, col) in pages_with_image:
                     self.canvas.create_rectangle(x1, y1, x2, y2, outline='#0066cc', width=2, fill='#e6f2ff', tags='grid')
                     # Numerar solo las páginas con imagen
                     page_num = pages_with_image.index((row, col)) + 1
-                    self.canvas.create_text(x1 + 15, y1 + 15, text=str(page_num), 
-                                          font=('Arial', 14, 'bold'), fill='#0066cc', tags='grid')
+                    self.canvas.create_text(x1 + 15, y1 + 15, text=str(page_num),
+                                          font=self.font_manager.get_font(14, 'bold'), fill='#0066cc', tags='grid')
                 else:
                     self.canvas.create_rectangle(x1, y1, x2, y2, outline='#ccc', width=1, tags='grid')
         
@@ -446,10 +728,10 @@ class PosterPrinter:
                 self.draw_selection()
         
         # Configurar scroll region
-        total_w = self.mm_to_px(paper_w * self.workspace_cols)
-        total_h = self.mm_to_px(paper_h * self.workspace_rows)
+        total_w = self.mm_to_px(effective_w * self.workspace_cols + overlap)
+        total_h = self.mm_to_px(effective_h * self.workspace_rows + overlap)
         self.canvas.configure(scrollregion=(0, 0, total_w, total_h))
-    
+
     def draw_selection(self):
         # Limpiar handles anteriores
         for handle in self.resize_handles:
@@ -467,18 +749,18 @@ class PosterPrinter:
         # Rectángulo de selección más visible
         self.selection_rect = self.canvas.create_rectangle(x1, y1, x2, y2, outline='#0066cc', width=3, dash=(5, 3), tags='selection')
         
-        # Handles más grandes en las esquinas
+        # Handles en las esquinas (dentro del rectángulo de selección)
         handle_size = 10
         positions = [
-            (x1, y1, 'nw'),
-            (x2, y1, 'ne'),
-            (x1, y2, 'sw'),
-            (x2, y2, 'se'),
+            (x1, y1, 'nw', x1, y1, x1 + handle_size * 2, y1 + handle_size * 2),
+            (x2, y1, 'ne', x2 - handle_size * 2, y1, x2, y1 + handle_size * 2),
+            (x1, y2, 'sw', x1, y2 - handle_size * 2, x1 + handle_size * 2, y2),
+            (x2, y2, 'se', x2 - handle_size * 2, y2 - handle_size * 2, x2, y2),
         ]
-        
-        for x, y, corner in positions:
+
+        for cx, cy, corner, hx1, hy1, hx2, hy2 in positions:
             handle = self.canvas.create_rectangle(
-                x - handle_size, y - handle_size, x + handle_size, y + handle_size,
+                hx1, hy1, hx2, hy2,
                 fill='#0066cc', outline='white', width=2, tags=f'handle_{corner}'
             )
             self.resize_handles.append(handle)
@@ -611,205 +893,36 @@ class PosterPrinter:
         self.update_preview()
     
     def print_poster(self):
+        """Abrir diálogo de impresión modular"""
         if self.original_image is None:
             messagebox.showwarning("Advertencia", "Por favor carga una imagen primero")
             return
         
-        # Advertir si modo sangrado está activado
-        if self.bleed_mode.get():
-            response = messagebox.askyesno("Modo Sangrado Activado",
-                                          "El modo sin bordes (sangrado) está activado.\n\n"
-                                          "RECOMENDACIÓN: Usa 'Exportar PDF' para mejor resultado.\n\n"
-                                          "¿Deseas continuar con impresión directa de todas formas?")
-            if not response:
-                return
+        # Preparar datos para el diálogo
+        paper_w, paper_h = self.get_paper_size_mm()
+        pages_with_image = self.get_pages_with_image()
         
-        try:
-            # Obtener lista de impresoras
-            printers = [printer[2] for printer in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
-            
-            if not printers:
-                messagebox.showerror("Error", "No se encontraron impresoras instaladas")
-                return
-            
-            default_printer = win32print.GetDefaultPrinter()
-            
-            # Crear ventana de selección de impresora
-            printer_dialog = tk.Toplevel(self.root)
-            printer_dialog.title("Seleccionar Impresora")
-            printer_dialog.geometry("400x300")
-            printer_dialog.transient(self.root)
-            printer_dialog.grab_set()
-            
-            ttk.Label(printer_dialog, text="Selecciona la impresora:", font=('Arial', 11, 'bold')).pack(pady=10, padx=10)
-            
-            # Info de impresión
-            info_text = f"{self.pages_label.cget('text')}"
-            ttk.Label(printer_dialog, text=info_text, font=('Arial', 10)).pack(pady=5)
-            
-            # Lista de impresoras
-            frame = ttk.Frame(printer_dialog)
-            frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-            
-            scrollbar = ttk.Scrollbar(frame)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-            
-            printer_listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set, font=('Arial', 10))
-            printer_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            scrollbar.config(command=printer_listbox.yview)
-            
-            # Llenar lista
-            for i, printer in enumerate(printers):
-                if printer == default_printer:
-                    printer_listbox.insert(tk.END, f"{printer} (Predeterminada)")
-                    printer_listbox.selection_set(i)
-                else:
-                    printer_listbox.insert(tk.END, printer)
-            
-            selected_printer = [None]
-            
-            def on_print():
-                selection = printer_listbox.curselection()
-                if selection:
-                    idx = selection[0]
-                    selected_printer[0] = printers[idx]
-                    printer_dialog.destroy()
-                else:
-                    messagebox.showwarning("Advertencia", "Por favor selecciona una impresora")
-            
-            def on_cancel():
-                printer_dialog.destroy()
-            
-            # Botones
-            btn_frame = ttk.Frame(printer_dialog)
-            btn_frame.pack(pady=10)
-            
-            ttk.Button(btn_frame, text="✅ Imprimir", command=on_print).pack(side=tk.LEFT, padx=5)
-            ttk.Button(btn_frame, text="❌ Cancelar", command=on_cancel).pack(side=tk.LEFT, padx=5)
-            
-            printer_dialog.wait_window()
-            
-            if not selected_printer[0]:
-                return
-            
-            printer_name = selected_printer[0]
-            
-            # Preparar imagen - NO ROTAR AQUÍ, mantener orientación original
-            paper_w, paper_h = self.get_paper_size_mm()
-            overlap = self.overlap_mm.get()
-            effective_w = paper_w - overlap
-            effective_h = paper_h - overlap
-            
-            # Aplicar solo rotación manual del usuario
-            img_to_print = self.original_image.copy()
-            if self.rotation_angle.get() != 0:
-                img_to_print = img_to_print.rotate(-self.rotation_angle.get(), expand=True, resample=Image.BICUBIC)
-            
-            # NO rotar por orientación aquí - mantener coordenadas originales
-            # Calcular factor de escala con dimensiones ORIGINALES
-            scale_factor = self.img_width / img_to_print.width
-            
-            # Obtener páginas con contenido
-            pages_with_image = self.get_pages_with_image()
-            
-            # Filtrar páginas completamente vacías con validación estricta
-            pages_to_print = []
-            for row, col in pages_with_image:
-                # Calcular área de esta página EN MM
-                page_left_mm = col * effective_w
-                page_top_mm = row * effective_h
-                
-                # Calcular qué parte de la imagen mostrar EN MM
-                crop_left_mm = max(0, page_left_mm - self.img_x)
-                crop_top_mm = max(0, page_top_mm - self.img_y)
-                crop_right_mm = min(self.img_width, (page_left_mm + paper_w) - self.img_x)
-                crop_bottom_mm = min(self.img_height, (page_top_mm + paper_h) - self.img_y)
-                
-                # Verificar que el área de crop es válida y tiene contenido
-                if crop_right_mm > crop_left_mm and crop_bottom_mm > crop_top_mm:
-                    # Convertir a PIXELS
-                    crop_left_px = int(crop_left_mm / scale_factor)
-                    crop_top_px = int(crop_top_mm / scale_factor)
-                    crop_right_px = int(crop_right_mm / scale_factor)
-                    crop_bottom_px = int(crop_bottom_mm / scale_factor)
-                    
-                    # Validar límites de imagen
-                    if (crop_right_px > crop_left_px and crop_bottom_px > crop_top_px and
-                        crop_left_px >= 0 and crop_top_px >= 0 and
-                        crop_right_px <= img_to_print.width and crop_bottom_px <= img_to_print.height and
-                        (crop_right_px - crop_left_px) > 10 and (crop_bottom_px - crop_top_px) > 10):
-                        pages_to_print.append((row, col))
-            
-            if not pages_to_print:
-                messagebox.showwarning("Advertencia", "No hay páginas con imagen para imprimir")
-                return
-            
-            # Imprimir cada página
-            hprinter = win32print.OpenPrinter(printer_name)
-            
-            try:
-                total_pages = len(pages_to_print)
-                current_page = 0
-                
-                for row, col in pages_to_print:
-                    current_page += 1
-                    
-                    hdc = win32ui.CreateDC()
-                    hdc.CreatePrinterDC(printer_name)
-                    hdc.StartDoc(f"Poster - Página {current_page} de {total_pages}")
-                    hdc.StartPage()
-                    
-                    # Calcular área de esta página EN MM (coordenadas originales)
-                    page_left_mm = col * effective_w
-                    page_top_mm = row * effective_h
-                    
-                    # Calcular qué parte de la imagen mostrar EN MM
-                    crop_left_mm = max(0, page_left_mm - self.img_x)
-                    crop_top_mm = max(0, page_top_mm - self.img_y)
-                    crop_right_mm = min(self.img_width, (page_left_mm + paper_w) - self.img_x)
-                    crop_bottom_mm = min(self.img_height, (page_top_mm + paper_h) - self.img_y)
-                    
-                    # Convertir a PIXELS de la imagen
-                    crop_left_px = int(crop_left_mm / scale_factor)
-                    crop_top_px = int(crop_top_mm / scale_factor)
-                    crop_right_px = int(crop_right_mm / scale_factor)
-                    crop_bottom_px = int(crop_bottom_mm / scale_factor)
-                    
-                    # Recortar tile de la imagen ORIGINAL (sin rotar)
-                    cropped = img_to_print.crop((crop_left_px, crop_top_px, crop_right_px, crop_bottom_px))
-                    
-                    # ROTAR EL TILE si la orientación es horizontal
-                    if self.orientation == 'horizontal':
-                        cropped = cropped.rotate(-90, expand=True, resample=Image.BICUBIC)
-                    
-                    # Añadir número de página con tamaño PEQUEÑO (6-11pts)
-                    if self.show_page_numbers.get():
-                        draw = ImageDraw.Draw(cropped)
-                        page_num = current_page
-                        try:
-                            # Tamaño pequeño: 9pts
-                            font = ImageFont.truetype("arial.ttf", 9)
-                        except:
-                            font = ImageFont.load_default()
-                        # Gris oscuro
-                        draw.text((10, 10), str(page_num), fill='#4a4a4a', font=font)
-                    
-                    # Imprimir
-                    dib = ImageWin.Dib(cropped)
-                    printer_w = hdc.GetDeviceCaps(8)  # HORZRES
-                    printer_h = hdc.GetDeviceCaps(10)  # VERTRES
-                    dib.draw(hdc.GetHandleOutput(), (0, 0, printer_w, printer_h))
-                    
-                    hdc.EndPage()
-                    hdc.EndDoc()
-                    hdc.DeleteDC()
-            finally:
-                win32print.ClosePrinter(hprinter)
-            
-            messagebox.showinfo("Éxito", f"Impresión completada en '{printer_name}'\nTotal: {total_pages} páginas")
-            
-        except Exception as e:
-            messagebox.showerror("Error de impresión", f"No se pudo imprimir:\n{str(e)}")
+        if not pages_with_image:
+            messagebox.showwarning("Advertencia", "No hay páginas con imagen para imprimir")
+            return
+        
+        app_data = {
+            'original_image': self.original_image,
+            'rotation_angle': self.rotation_angle.get(),
+            'orientation': self.orientation,
+            'paper_w_mm': paper_w,
+            'paper_h_mm': paper_h,
+            'overlap_mm': self.overlap_mm.get(),
+            'img_x': self.img_x,
+            'img_y': self.img_y,
+            'img_width': self.img_width,
+            'img_height': self.img_height,
+            'pages_with_image': pages_with_image,
+            'show_page_numbers': self.show_page_numbers.get(),
+            'font_manager': self.font_manager,
+        }
+        
+        show_print_dialog(self.root, app_data)
     
     def export_pdf(self):
         if self.original_image is None:
@@ -855,7 +968,9 @@ class PosterPrinter:
                 img = img.resize((target_width_px, target_height_px), Image.LANCZOS)
                 
                 # Guardar imagen temporalmente
-                temp_img_path = "temp_poster.png"
+                temp_img_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                temp_img_path = temp_img_file.name
+                temp_img_file.close()
                 img.save(temp_img_path)
                 
                 effective_w = paper_w - overlap
@@ -972,6 +1087,10 @@ class PosterPrinter:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    if DND_AVAILABLE:
+        root = TkinterDnD.Tk()
+    else:
+        root = tk.Tk()
+    
     app = PosterPrinter(root)
     root.mainloop()

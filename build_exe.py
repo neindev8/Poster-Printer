@@ -6,13 +6,16 @@ PyInstaller.__main__.run([
     '--name=PosterPrinter',
     '--onefile',
     '--windowed',
-    '--icon=NONE',
+    '--icon=resources/icons/icon.png',
     '--add-data=requirements.txt;.',
+    '--add-data=resources;resources',
+    '--add-data=about.py;.',
+    '--add-data=print_dialog.py;.',
     '--hidden-import=PIL._tkinter_finder',
     '--hidden-import=win32timezone',
     '--clean',
     '--noconfirm',
 ])
 
-print("\n✓ Ejecutable creado en la carpeta 'dist'")
+print("\n✔ Ejecutable creado en la carpeta 'dist'")
 print("  Archivo: dist/PosterPrinter.exe")

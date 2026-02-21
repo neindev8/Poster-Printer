@@ -1,0 +1,27 @@
+POSTER PRINTER v2.12.6
+======================
+
+INSTALACIÓN RÁPIDA:
+1. Doble click en INSTALAR.bat
+2. Doble click en EJECUTAR.bat
+
+COMPILAR A .EXE:
+1. Doble click en COMPILAR.bat
+2. El .exe estará en dist/PosterPrinter.exe
+
+IMPORTANTE:
+- Asegúrate de tener la carpeta /resources/ completa con:
+  - resources/icons/icon.png
+  - resources/easter_egg/ (5 imágenes de dragones)
+  - resources/data/version_info.json
+  - resources/data/romantic_phrases.txt
+  - resources/fonts/ (opcional, Aptos fonts)
+
+CAMBIOS v2.12.6:
+- Print Dialog optimizado (botones siempre visibles)
+- About Dialog arreglado (layout fijo, verde correcto)
+- Animación ping-pong estilo WinRAR
+- Altura ajustada para mejor visibilidad
+
+EASTER EGG:
+Click en "v2.12.6 ⓘ" → Hacer 8 Ctrl+Click en el icono → ¡Sorpresa! 🐉💚

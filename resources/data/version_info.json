@@ -1,0 +1,60 @@
+{
+  "current_version": "2.12.6",
+  "versions": [
+    {
+      "version": "2.12.6",
+      "date": "Noviembre 2025",
+      "description": "Print Dialog optimizado, About Dialog arreglado, correcciones de usabilidad"
+    },
+    {
+      "version": "2.12.5",
+      "date": "Noviembre 2025",
+      "description": "Fix About: Imágenes 128x128 fijas, ventana 450x520"
+    },
+    {
+      "version": "2.12.4",
+      "date": "Noviembre 2025",
+      "description": "Fix: Botones de impresión visibles en posición correcta"
+    },
+    {
+      "version": "2.12.3",
+      "date": "Noviembre 2025",
+      "description": "Fix crítico: About vacío corregido"
+    },
+    {
+      "version": "2.12.2",
+      "date": "Noviembre 2025",
+      "description": "Fix: Botones visibles en diálogo de impresión"
+    },
+    {
+      "version": "2.12.1",
+      "date": "Noviembre 2025",
+      "description": "Fixes: Motor Windows + Botón PDF + Iconos + Animaciones + Encoding"
+    },
+    {
+      "version": "2.12.0",
+      "date": "Noviembre 2025",
+      "description": "Sistema de impresión modular + Reimprimir tiles + Motor Windows"
+    },
+    {
+      "version": "2.11.9",
+      "date": "Noviembre 2025",
+      "description": "Recursos organizados + Fuente Aptos + Fix selección de páginas"
+    },
+    {
+      "version": "2.11.2",
+      "date": "Noviembre 2025",
+      "description": "Drag & Drop funcional en toda la ventana"
+    },
+    {
+      "version": "2.11.1",
+      "date": "Noviembre 2025",
+      "description": "Diálogo Acerca de + Easter Egg + Icono personalizado"
+    },
+    {
+      "version": "2.11.0",
+      "date": "Noviembre 2025",
+      "description": "Rotación de tiles individuales (SIN estiramiento) + números pequeños"
+    }
+  ]
+}

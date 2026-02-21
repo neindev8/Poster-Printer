@@ -1,0 +1,56 @@
+⚠️ IMPORTANTE - CARPETA RESOURCES REQUERIDA ⚠️
+================================================
+
+Este ZIP NO incluye la carpeta /resources/ porque contiene imágenes
+y archivos de datos que debes agregar manualmente.
+
+ESTRUCTURA REQUERIDA:
+---------------------
+PosterPrinter_v2.12.6/
+├── about.py
+├── poster_printer.py
+├── print_dialog.py
+├── build_exe.py
+├── requirements.txt
+├── INSTALAR.bat
+├── EJECUTAR.bat
+├── COMPILAR.bat
+├── LEEME.txt
+├── PATCHNOTES.txt
+└── resources/                    ← DEBES AGREGAR ESTA CARPETA
+    ├── icons/
+    │   └── icon.png             (128x128 o superior)
+    ├── easter_egg/
+    │   ├── dragon_dead.png      (128x128)
+    │   ├── dragon_hug.png       (128x128)
+    │   ├── dragon_head.png      (128x128)
+    │   ├── dragon_s.png         (128x128)
+    │   └── dragon_hug2.png      (128x128)
+    ├── fonts/                    (OPCIONAL - usa fuentes del sistema si no está)
+    │   ├── Aptos.ttf
+    │   ├── Aptos-Bold.ttf
+    │   └── ...
+    └── data/
+        ├── version_info.json
+        └── romantic_phrases.txt
+
+CONTENIDO MÍNIMO PARA version_info.json:
+-----------------------------------------
+{
+  "current_version": "2.12.6",
+  "versions": [
+    {
+      "version": "2.12.6",
+      "date": "Noviembre 2025",
+      "description": "Print Dialog optimizado + About Dialog fix"
+    }
+  ]
+}
+
+CONTENIDO MÍNIMO PARA romantic_phrases.txt:
+--------------------------------------------
+Para mi Aries: esos brazos tuyos fueron hechos para rodearme.
+Cada día contigo es un regalo que atesoro.
+Eres mi hogar, mi paz, mi todo.
+
+SIN LA CARPETA RESOURCES LA APP NO FUNCIONARÁ CORRECTAMENTE.

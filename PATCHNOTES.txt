@@ -1,0 +1,35 @@
+═══════════════════════════════════════════════════
+  POSTER PRINTER - PATCHNOTES v2.12.6
+═══════════════════════════════════════════════════
+
+📅 Noviembre 2025
+
+🔧 FIXES CRÍTICOS:
+-------------------
+[PRINT DIALOG]
+✅ Botones "Imprimir" y "Cancelar" ahora SIEMPRE VISIBLES
+✅ Altura optimizada de 550px → 580px
+✅ Contenido scrolleable con footer fijo
+✅ Reducción de espaciado innecesario
+
+[ABOUT DIALOG]  
+✅ Layout vertical completamente FIJO (icono siempre arriba)
+✅ Color verde correcto (#2e7d32) para easter egg
+✅ Altura ajustada a 590px
+✅ Arreglado problema de ventana en blanco
+
+🎨 NUEVAS FUNCIONES:
+--------------------
+✨ Animación "Ping-Pong" lateral (estilo WinRAR)
+✨ Texto en negrita para dedicatoria easter egg
+✨ 6 animaciones totales: Blink, Rotate, Bounce, Scale, Shake, Ping-Pong
+
+📐 OPTIMIZACIONES:
+------------------
+• Print Dialog: espaciado reducido 20px → 15px/8px
+• About Dialog: organización vertical mejorada
+• Mejor manejo de frames temporales en animaciones
+
+═══════════════════════════════════════════════════
+Desarrollado por neindev8 para asistencia profesional
+═══════════════════════════════════════════════════

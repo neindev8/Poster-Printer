@@ -1,0 +1,43 @@
+═══════════════════════════════════════════════════════════════════
+  CARPETA DE FUENTES - INSTRUCCIONES
+═══════════════════════════════════════════════════════════════════
+
+Esta carpeta está destinada para las fuentes Aptos de Office 2024.
+
+CÓMO AGREGAR FUENTES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Copia los archivos .ttf de la familia Aptos aquí
+2. Variantes recomendadas:
+   - Aptos.ttf
+   - Aptos-Bold.ttf
+   - Aptos-Italic.ttf
+   - Aptos-Black.ttf
+   - Aptos-Black-Italic.ttf
+   - Aptos-Display.ttf
+   - Aptos-Display-Bold.ttf
+   - Aptos-Narrow.ttf
+   - Aptos-SemiBold.ttf
+   - Aptos-Serif.ttf
+   - (y cualquier otra variante que tengas)
+
+3. La aplicación las detectará automáticamente
+
+FALLBACK AUTOMÁTICO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Si no agregas fuentes Aptos, la aplicación usará automáticamente:
+1. Segoe UI (si está disponible)
+2. Calibri (si está disponible)
+3. Arial (siempre disponible)
+
+La aplicación NO se romperá si esta carpeta está vacía.
+
+NOTA:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Las fuentes Aptos NO están incluidas en este paquete por derechos de autor.
+Debes obtenerlas de una instalación legítima de Microsoft Office 2024.
+
+Ubicación típica en Windows:
+C:\Windows\Fonts\Aptos*.ttf
