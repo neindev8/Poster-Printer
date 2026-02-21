@@ -1,0 +1,108 @@
+═══════════════════════════════════════════════════════════════════
+  POSTER PRINTER v2.11.0 - PATCHNOTES
+═══════════════════════════════════════════════════════════════════
+
+🐛 BUGS CRÍTICOS CORREGIDOS - ROTACIÓN SIN ESTIRAMIENTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ FIX 1: Rotación de tiles individuales (SIN ESTIRAMIENTO)
+   - Problema: Al rotar la imagen completa, las coordenadas se 
+               desajustaban causando estiramiento
+   - Solución CORRECTA:
+     • NO rotar la imagen completa
+     • Mantener coordenadas originales para crops
+     • Recortar tiles de imagen ORIGINAL
+     • ROTAR SOLO cada tile individual después de recortar
+   - Resultado: Tiles perfectos sin deformación ✅
+
+✅ FIX 2: Números de página PEQUEÑOS
+   - Problema: Números gigantes (heredaban escala de imagen)
+   - Solución: 
+     • Tamaño FIJO de 9pts (rango 6-11pts)
+     • Color gris oscuro #4a4a4a
+     • Posición (10, 10) en lugar de (15, 15)
+   - Resultado: Números discretos y legibles ✅
+
+✅ FIX 3: Filtro mejorado de páginas vacías
+   - Problema: Páginas sin contenido se imprimían (gibberish)
+   - Solución: 
+     • Validación de área mínima (>10px ancho y alto)
+     • Verificación estricta de límites de imagen
+     • Doble filtro antes de imprimir
+   - Resultado: Solo páginas con contenido real ✅
+
+
+📐 LÓGICA DE ROTACIÓN CORRECTA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANTES (v2.10.0 - INCORRECTO):
+1. Rotar imagen completa 90°
+2. Intercambiar img_width ↔ img_height  
+3. Calcular crops con coordenadas ajustadas
+4. Resultado: ESTIRAMIENTO por desajuste de coordenadas ❌
+
+AHORA (v2.11.0 - CORRECTO):
+1. Mantener imagen en orientación ORIGINAL
+2. Calcular crops con coordenadas ORIGINALES
+3. Recortar tile de imagen original
+4. ROTAR solo el tile individual si orientation == 'horizontal'
+5. Resultado: Tiles perfectos sin deformación ✅
+
+
+🔧 CAMBIOS TÉCNICOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+En print_poster():
+• ELIMINADO: Rotación de imagen completa
+• ELIMINADO: Intercambio de img_width/img_height
+• MANTENIDO: Coordenadas originales (self.img_x, self.img_y)
+• AGREGADO: Rotación de tile individual:
+  if self.orientation == 'horizontal':
+      cropped = cropped.rotate(-90, expand=True)
+      
+• MEJORADO: Filtro de páginas vacías:
+  - Verifica área mínima >10px
+  - Valida límites estrictos de imagen
+  
+• CORREGIDO: Tamaño de número:
+  - Fuente: 9pts (antes 30pts)
+  - Color: #4a4a4a (antes #333333)
+
+
+✅ FLUJO DE IMPRESIÓN HORIZONTAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PASO A PASO:
+1. Usuario selecciona: A4 Horizontal
+2. Imagen cargada: 1024×1024px "Choose Kindness"
+3. Vista previa: Muestra imagen en orientación original
+4. Al imprimir:
+   ├─ Calcular crops en coordenadas originales
+   ├─ Recortar tile (ej: 210×297mm de la imagen)
+   ├─ Rotar tile -90° → ahora es 297×210mm
+   └─ Imprimir tile rotado en papel horizontal ✅
+
+
+📊 VALIDACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERTICAL (210×297mm):
+✓ Imagen mantiene orientación
+✓ Tiles en formato vertical
+✓ NO se aplica rotación de tiles
+✓ Números pequeños (9pts) gris oscuro
+
+HORIZONTAL (297×210mm):
+✓ Imagen se mantiene en coordenadas originales
+✓ Cada tile se recorta correctamente
+✓ Cada tile se rota -90° individualmente
+✓ Tiles en formato horizontal perfecto
+✓ SIN estiramiento ✅
+✓ Números pequeños (9pts) gris oscuro
+
+
+═══════════════════════════════════════════════════════════════════
+Versión: 2.11.0
+Fecha: Noviembre 2025
+Fix: Rotación de tiles individuales (SIN estiramiento) + números pequeños
+═══════════════════════════════════════════════════════════════════
